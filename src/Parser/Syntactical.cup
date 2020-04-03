@@ -1,0 +1,292 @@
+package Parser;
+
+import java_cup.runtime.Symbol;
+import java.util.ArrayList;
+import org.json.simple.*;
+import com.google.gson.*;
+import AST.*;
+
+
+parser code
+{:
+	private Symbol symbol;
+	public JSONObject program_json = new JSONObject();
+
+	private boolean debug = true;
+	
+	public void syntax_error(Symbol s){
+	    System.out.println("Ocurrio un errorx1");
+	}
+
+	public String print(JSONObject item){
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        JsonParser jp = new JsonParser();
+        JsonElement je = jp.parse(item.toString());
+        String prettyJsonString = gson.toJson(je);
+        return prettyJsonString;
+    }
+
+    public Symbol getSymbol(){
+        return symbol;
+    }
+:}
+
+
+/* Returned by the Lexical */
+
+terminal LPAREN, RPAREN, LBRACE, RBRACE, COMMA, SEMI;
+terminal ADD, SUB, STAR, DIV;
+terminal NOT, AND, OR;
+terminal EQ, NE, LE, LT, GE, GT;
+terminal ASSIGN;
+terminal FALSE, TRUE;
+terminal CHAR, INT, STRING, BOOLEAN;
+terminal PRINT, IF, ELSE, WHILE, RETURN, FOR;
+terminal INCREMENT, DECREMENT;
+terminal CHAR_LITERAL;
+terminal STRING_LITERAL;
+terminal String INT_LITERAL;
+terminal String IDENTIFIER;
+terminal ERROR;
+terminal COLON;
+
+
+/* Productions */
+non terminal 	program;
+non terminal 	edecl_list;
+non terminal 	edecl;
+non terminal 	String type_spec;
+non terminal 	block;
+non terminal 	const_expr;
+non terminal    decl_list;
+non terminal    decl;
+non terminal    String name_expr;
+non terminal    ArrayList opt_param_list;
+non terminal    stmt_list;
+non terminal    stmt;
+non terminal    ArrayList param_list;
+non terminal    param;
+non terminal    opt_arg_list;
+non terminal    arg_list;
+non terminal    matched_stmt;
+non terminal    unmatched_stmt;
+non terminal    expr;
+non terminal    or_expr;
+non terminal    and_expr;
+non terminal    eq_expr;
+non terminal    rel_expr;
+non terminal    add_expr;
+non terminal    mul_expr;
+non terminal    unary_expr;
+non terminal    atomic_expr;
+
+start with program;
+
+program ::=
+	  edecl_list:LIST {:
+          JSONObject program_json = new JSONObject();
+          program_json.put("declarations", LIST);
+          System.out.println(program_json);
+          RESULT = program_json;
+	  :}
+	| error
+	;
+
+edecl_list ::=
+    edecl_list:LEFT edecl:RIGHT {:
+    if(LEFT instanceof ArrayList){
+        ArrayList declarations =  (ArrayList) LEFT;
+        declarations.add(RIGHT);
+        RESULT = declarations;
+    }else{
+        ArrayList declarations = new ArrayList();
+        declarations.add(RIGHT);
+        RESULT = declarations;
+    }
+
+	:}
+	| {: :}
+	| error SEMI
+	;
+
+edecl ::=
+	  type_spec:TYPE name_expr:NAME SEMI {:
+	    RESULT = new Declaration(NAME, TYPE);
+	  :}
+       | type_spec:TYPE name_expr:NAME ASSIGN const_expr:VALUE SEMI {:
+            RESULT = new Declaration(NAME, TYPE);
+       :}
+       | type_spec:TYPE name_expr:NAME LPAREN opt_param_list:PARAMS RPAREN block:BODY {:
+            Function func = new Function(NAME, TYPE);
+            func.setParameters(PARAMS);
+            RESULT = func;
+       :}
+	;
+
+type_spec ::=
+	  BOOLEAN {: RESULT = "boolean"; :}
+	| CHAR    {:
+	    RESULT = "char";
+	:}
+	| INT     {:
+	    RESULT = "int";
+	:}
+	| STRING  {: :}
+	| CHAR STAR {:
+	    RESULT = "char*";
+	:}
+	| INT STAR {:
+	    RESULT = "int*";
+	:}
+	;
+
+block ::=
+	  LBRACE decl_list:DECLS stmt_list:STMTS RBRACE {: :}
+	;
+
+decl_list ::=
+	  decl_list:LEFT decl:RIGHT {: :}
+	| {: :}
+	;
+
+decl ::=
+	  type_spec:TYPE name_expr:NAME SEMI {: :}
+	| type_spec:TYPE name_expr:NAME ASSIGN const_expr:VALUE SEMI {: :}
+	;
+
+stmt_list ::=
+	  stmt_list:LEFT stmt:RIGHT {: :}
+	| {: :}
+	;
+
+stmt ::=
+	  matched_stmt:STMT {: :}
+	| unmatched_stmt:STMT {: :}
+	| error
+	;
+
+matched_stmt ::=
+	  IF LPAREN expr:CONDITION RPAREN matched_stmt:IFCLAUSE ELSE matched_stmt:ELSECLAUSE {: :}
+	| expr:EXPR SEMI {: :}
+	| block:BLOCK {: :}
+	| PRINT arg_list:ARGS SEMI {: :}
+	| FOR LPAREN decl_list expr:CONDITION SEMI expr:ITERATION RPAREN matched_stmt:BODY {: :}
+	| WHILE LPAREN expr:CONDITION RPAREN matched_stmt:BODY {: :}
+	| RETURN expr:VALUE SEMI {: :}
+	| RETURN SEMI {: :}
+	;
+
+unmatched_stmt ::=
+	  IF LPAREN expr:CONDITION RPAREN stmt:IFCLAUSE {: :}
+	| IF LPAREN expr:CONDITION RPAREN matched_stmt:IFCLAUSE ELSE unmatched_stmt:ELSECLAUSE {: :}
+	;
+
+expr ::=
+	 name_expr:NAME ASSIGN expr:VALUE {:
+
+
+	 :}
+	| or_expr:EXPR {: System.out.println("ghhh");:}
+	;
+
+
+or_expr ::=
+	  or_expr:LEFT OR and_expr:RIGHT {: :}
+	| and_expr:EXPR {: :}
+	;
+
+and_expr ::=
+	  and_expr:LEFT AND eq_expr:RIGHT {: :}
+	| eq_expr:EXPR {: :}
+	;
+
+eq_expr ::=
+	  eq_expr:LEFT EQ rel_expr:RIGHT {: :}
+	| eq_expr:LEFT NE rel_expr:RIGHT {: :}
+	| rel_expr:EXPR {: :}
+	;
+
+rel_expr ::=
+	  rel_expr:LEFT LT add_expr:RIGHT {: :}
+	| rel_expr:LEFT GT add_expr:RIGHT {: :}
+	| rel_expr:LEFT LE add_expr:RIGHT {: :}
+	| rel_expr:LEFT GE add_expr:RIGHT {: :}
+	| add_expr:EXPR {: :}
+	;
+
+add_expr ::=
+	  add_expr:LEFT ADD mul_expr:RIGHT {: :}
+	| add_expr:LEFT SUB mul_expr:RIGHT {: :}
+	| mul_expr:EXPR {: :}
+	;
+
+mul_expr ::=
+	  mul_expr:LEFT STAR unary_expr:RIGHT {: :}
+	| mul_expr:LEFT DIV unary_expr:RIGHT {: :}
+	| unary_expr:EXPR {: :}
+	;
+
+unary_expr ::=
+	  NOT unary_expr:ARG {: :}
+	| SUB unary_expr:ARG {: :}
+	| atomic_expr:EXPR {: :}
+	;
+
+atomic_expr ::=
+	  LPAREN expr:MIDDLE RPAREN {: :}
+	| name_expr:NAME {: :}
+	| const_expr:VALUE {: :}
+	| name_expr:NAME LPAREN opt_arg_list:ARGS RPAREN {: :}
+	| name_expr:NAME INCREMENT {: :}
+	| name_expr:NAME DECREMENT {: :}
+	;
+
+name_expr ::=
+	  IDENTIFIER:NAME {: RESULT  = NAME;:}
+	;
+
+const_expr ::=
+	  CHAR_LITERAL:VALUE {: :}
+	| INT_LITERAL:VALUE {: :}
+	| STRING_LITERAL:VALUE {: :}
+	| TRUE {: :}
+	| FALSE {: :}
+	;
+
+opt_param_list ::=
+	  param_list:LIST {:
+	     ArrayList parameters = (ArrayList) LIST;
+	     RESULT = LIST;
+	  :}
+	| {: :}
+	;
+
+param_list ::=
+	  param_list:LEFT COMMA param:RIGHT {:
+	    ArrayList parameters = (ArrayList) LEFT;
+        parameters.add(RIGHT);
+        RESULT = parameters;
+	  :}
+	| param:PARAM {:
+	    ArrayList parameters = new ArrayList();
+        parameters.add(PARAM);
+        RESULT = parameters;
+	:}
+	;
+
+param ::=
+	  type_spec:TYPE IDENTIFIER:NAME {:
+          Declaration param  = new Declaration(NAME, TYPE);
+          RESULT = param;
+	   :}
+	;
+
+opt_arg_list ::=
+	  arg_list:LIST {: :}
+	| {: :}
+	;
+
+arg_list ::=
+	  arg_list:LEFT COMMA expr:RIGHT {: :}
+	| expr:ARG {: :}
+	;
